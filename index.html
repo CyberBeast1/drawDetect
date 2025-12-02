@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gesture Drawing Classifier</title>
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #2c3e50;
+        color: white;
+        padding-top: 20px;
+      }
+
+      h1 {
+        font-size: 2rem;
+        margin-bottom: 5px;
+      }
+
+      #app-info {
+        /* Container for status and prediction outside the video area */
+        width: 640px;
+        margin-bottom: 10px;
+        text-align: center;
+      }
+
+      #app-status {
+        font-size: 1.2rem;
+        padding: 5px 0;
+      }
+
+      #prediction-result {
+        font-size: 1.4rem;
+        font-weight: bold;
+        min-height: 30px; /* Prevent CLS */
+      }
+
+      #video-container {
+        position: relative;
+        width: 640px;
+        height: 480px;
+        border: 5px solid #34495e;
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      }
+
+      #webcam,
+      #drawing-canvas,
+      #overlay-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* --- Z-INDEX FIXES START HERE --- */
+      #webcam {
+        /* opacity: 0.1; */
+        transform: scaleX(-1);
+        z-index: 10; /* Base layer for the background video feed */
+      }
+
+      #drawing-canvas {
+        z-index: 20; /* Drawing layer must be above the video */
+      }
+
+      #overlay-canvas {
+        z-index: 30; /* Keypoint/Landmark layer must be above the drawing */
+      }
+      /* --- Z-INDEX FIXES END HERE --- */
+
+      /* --- SELECTION OVERLAY (NEW POSITIONING) --- */
+      /* Find the existing #selection-overlay rule and modify it */
+      #selection-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        padding: 10px;
+        background-color: rgba(0, 0, 0, 0.6);
+        z-index: 50;
+        display: flex;
+        /* 🌟 FIX: Use space-between to push the start/end items to the corners */
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px; /* Maintain gap between all elements */
+        box-sizing: border-box;
+      }
+
+      /* ❌ Remove the old #ui-controls CSS entirely or rename it */
+      /* Add the new CSS for the color container */
+      #color-controls {
+        display: flex;
+        gap: 8px;
+        /* 🌟 New: Allows this element to take up the available middle space */
+        margin: 0 auto;
+      }
+
+      .ui-button {
+        background-color: #ecf0f1;
+        color: #2c3e50;
+        border: 2px solid #bdc3c7;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: background-color 0.15s, transform 0.1s;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        /* Ensure buttons are visible in front of canvas content */
+        z-index: 60;
+      }
+
+      .color-btn {
+        width: 35px;
+        height: 35px;
+        padding: 0;
+        border-width: 3px;
+      }
+
+      .selected {
+        background-color: #f1c40f;
+        border-color: white !important;
+        box-shadow: 0 0 10px rgba(241, 196, 15, 0.8);
+      }
+
+      #classify-btn {
+        background-color: #27ae60;
+        color: white;
+        font-weight: bold;
+        border-color: #27ae60;
+        min-width: 120px;
+      }
+
+      #app-prompt {
+        position: absolute;
+        top: 5%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 1.4rem;
+        color: #f1c40f;
+        background-color: rgba(0, 0, 0, 0.9);
+        padding: 5px;
+        border-radius: 10px;
+        z-index: 40; /* Above drawing, below selection overlay */
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gesture Drawing App</h1>
+
+    <div id="app-info">
+      <div id="app-status">Loading...</div>
+      <div id="prediction-result"></div>
+    </div>
+    
+    <div id="video-container">
+      <canvas id="drawing-canvas"></canvas>
+      <canvas id="overlay-canvas"></canvas>
+      <video id="webcam"></video>
+      
+      <div id="selection-overlay">
+        <button id="classify-btn" class="ui-button" data-action="CLASSIFY">
+          CLASSIFY DRAWING
+        </button>
+        <button id="clear-btn" class="ui-button" data-action="CLEAR">
+          Clear Canvas
+        </button>
+
+        <div id="color-controls">
+          <button
+            id="white-btn"
+            class="ui-button color-btn selected"
+            style="background-color: white; border-color: white"
+            data-color="white"
+          ></button>
+          <button
+            id="blue-btn"
+            class="ui-button color-btn"
+            style="background-color: blue; border-color: blue"
+            data-color="blue"
+          ></button>
+          <button
+            id="green-btn"
+            class="ui-button color-btn"
+            style="background-color: green; border-color: green"
+            data-color="green"
+          ></button>
+          <button
+            id="red-btn"
+            class="ui-button color-btn"
+            style="background-color: red; border-color: red"
+            data-color="red"
+          ></button>
+          <button
+            id="yellow-btn"
+            class="ui-button color-btn"
+            style="background-color: yellow; border-color: yellow"
+            data-color="yellow"
+          ></button>
+        </div>
+        
+      </div>
+
+      <div id="app-prompt">Loading...</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.7.0/dist/tf.min.js"></script>
+    <script src="https://unpkg.com/@tensorflow-models/handpose@0.0.7/dist/handpose.js"></script>
+    <script src="./index.js"></script>
+  </body>
+</html>
